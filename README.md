@@ -43,7 +43,7 @@ These were detected by reading the code and running it, not by any hard-coded kn
 
 The full results are in [`capsule/report.html`](depexit/capsule/report.html) (visual report), [`capsule/capsule.json`](depexit/capsule/capsule.json) (machine-readable) and [`capsule/capsule.md`](depexit/capsule/capsule.md).
 
-**[▶ View the live report](https://www.github.com/debugvivaanbhimani/H26_TravisTanner_G4/depexit/capsule/report.html)**
+**[▶ View the live report](https://github.com/debugvivaanbhimani/H26_TravisTanner_G4/blob/main/depexit/capsule/report.html)**
 
 ---
 
