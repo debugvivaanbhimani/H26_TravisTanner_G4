@@ -41,7 +41,8 @@ These were detected by reading the code and running it, not by any hard-coded kn
 - **`pkg_resources` / `setuptools`** — deprecated API kept alive by a pinned `setuptools`.
 - Declared-but-unused packages (`six`, `idna`), unpinned packages, and a commented-out requirement.
 
-The full results are in [`capsule/report.html`](capsule/report.html) (visual report), [`capsule/capsule.json`](capsule/capsule.json) (machine-readable) and [`capsule/capsule.md`](capsule/capsule.md).
+The full results are in [`capsule/report.html`](depexit/capsule/report.html) (visual report), [`capsule/capsule.json`](depexit/capsule/capsule.json) (machine-readable) and [`capsule/capsule.md`](depexit/capsule/capsule.md).
+**[▶ View the live report](https://debugvivaanbhimani.github.io/H26_TravisTanner_G4/depexit/capsule/report.html)**
 
 ---
 
@@ -169,7 +170,7 @@ GEMMA_MODEL=google/gemma-4-26b-a4b-it
 
 ```bash
 # 1. Install
-git clone <this repository> && cd depexit
+git clone https://github.com/debugvivaanbhimani/H26_TravisTanner_G4.git && cd H26_TravisTanner_G4/depexit
 uv venv -p 3.12 .venv && source .venv/bin/activate
 uv pip install -r requirements.txt
 
@@ -269,7 +270,7 @@ check_gemma.py    one-command check that Gemma 4 is reachable
 
 ## Licence
 
-MIT — see [LICENSE](LICENSE). Gemma 4 weights are used under the [Gemma Terms of Use](https://ai.google.dev/gemma/terms).
+MIT — see [LICENSE](depexit/LICENSE). Gemma 4 weights are used under the [Gemma Terms of Use](https://ai.google.dev/gemma/terms).
 
 ---
 
