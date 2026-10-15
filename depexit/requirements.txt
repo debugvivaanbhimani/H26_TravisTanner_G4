@@ -1,2 +1,19 @@
+# ==============================================================================
+# Local AI Setup (Ollama + Gemma 4):
+#
+# 1. Install Ollama:
+#    brew install ollama
+#
+# 2. Start the Ollama background service:
+#    brew services start ollama
+#
+# 3. Download / pull Gemma 4 locally:
+#    ollama pull gemma4:e4b
+#
+# 4. Configure .env (optional - defaults to ollama if no API keys are set):
+#    GEMMA_PROVIDER=ollama
+#    GEMMA_MODEL=gemma4:e4b
+# ==============================================================================
+
 requests>=2.31
 packaging>=23

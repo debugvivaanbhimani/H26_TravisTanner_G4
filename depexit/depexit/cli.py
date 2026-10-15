@@ -53,6 +53,8 @@ def main(argv=None):
     ap.add_argument("--workers", type=int, default=3)
     ap.add_argument("--model", default=None, help="override GEMMA_MODEL")
     ap.add_argument("--no-ai", action="store_true", help="observed evidence only (no Gemma)")
+    ap.add_argument("--ai-cache", action="store_true",
+                    help="save Gemma answers to .depexit_ai_cache and re-use them on re-runs (development; flagged in the capsule)")
     ap.add_argument("--no-migrate", action="store_true", help="analyse + recommend, skip execution of replacements")
     args = ap.parse_args(argv)
 
@@ -118,20 +120,27 @@ def main(argv=None):
 
     ai, ai_checks, migrations, combined, gemma = {}, {}, {}, None, None
     if not args.no_ai:
+        import os
         from .gemma import Gemma
+        if args.ai_cache:
+            os.environ["DEPEXIT_AI_CACHE"] = str(Path(".depexit_ai_cache").resolve())
         gemma = Gemma(model=args.model)
-        log(f"AI model: {gemma.model}")
+        log(f"AI model: {gemma.model} via {gemma.label}")
         # ---------------- 4. AI: triage + grounding check ---------------------
-        ai = analysis.triage(gemma, flagged, {
+        only = {canonicalize_name(x) for x in args.only.split(",") if x.strip()}
+        to_triage = {n: e for n, e in flagged.items() if not only or n in only}
+        if only:
+            log(f"--only: AI analysis limited to {', '.join(sorted(to_triage)) or '(none matched)'}; "
+                "other dependencies keep their observed evidence")
+        ai = analysis.triage(gemma, to_triage, {
             "repo": repo_info.get("remote") or repo.name, "pythons": f"{args.python}/3.13",
             "manifest_files": ", ".join(manifests["files"]),
             "requires_python": manifests.get("requires_python")})
-        for n in flagged:
+        for n in to_triage:
             if n in ai:
                 ai_checks[n] = analysis.verify_ai_claims(inv[n], ai[n])
 
         # ---------------- 5. VERIFY: migrate + fix loop ------------------------
-        only = {canonicalize_name(x) for x in args.only.split(",") if x.strip()}
         todo = [n for n in sorted(flagged) if n in ai and (ai[n].get("action") or "keep") != "keep"
                 and (not only or n in only)]
         if not args.no_migrate and todo:
@@ -156,9 +165,7 @@ def main(argv=None):
         "baseline": migrate._slim(baseline), "variants": [migrate._slim(v) for v in variants],
         "inventory": inv, "ai": ai, "ai_checks": ai_checks,
         "migrations": migrations, "combined": combined,
-        "model": {"name": gemma.model, "provider": "Google AI Studio (Gemini API)",
-                  "endpoint": "generativelanguage.googleapis.com/v1beta generateContent",
-                  "terms": "Gemma Terms of Use: https://ai.google.dev/gemma/terms"} if gemma else None,
+        "model": gemma.describe() if gemma else None,
         "ai_transcript": gemma.transcript if gemma else [],
     })
     log("Capsule written:")

@@ -84,8 +84,10 @@ def evidence_for(dep: dict) -> dict:
     }
 
 
-def triage(gemma: Gemma, inventory: dict, ctx: dict, chunk: int = 6, workers: int = 2) -> dict[str, dict]:
+def triage(gemma: Gemma, inventory: dict, ctx: dict, chunk: int = 8, workers: int = 2) -> dict[str, dict]:
     names = sorted(inventory)
+    if not names:
+        return {}
     chunks = [names[i:i + chunk] for i in range(0, len(names), chunk)]
 
     def run(group):
@@ -97,6 +99,8 @@ def triage(gemma: Gemma, inventory: dict, ctx: dict, chunk: int = 6, workers: in
         return {str(it.get("name", "")).lower(): it for it in items if isinstance(it, dict)}
 
     out = {}
+    if getattr(gemma, "provider", "") == "ollama":
+        workers = 1   # a local model answers one request at a time anyway
     with ThreadPoolExecutor(workers) as ex:
         for part in ex.map(run, chunks):
             out.update(part)

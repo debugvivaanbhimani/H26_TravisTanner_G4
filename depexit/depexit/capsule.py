@@ -35,8 +35,12 @@ def _gaps_observed(mig: dict | None) -> list[dict]:
     for r in cmp.get("still_failing", []):
         gaps.append({"type": "preexisting_failure_not_fixed", "test": r["test"], "detail": r["message"]})
     if last.get("equivalence_valid_on_original") is False:
-        gaps.append({"type": "equivalence_test_invalid_on_original",
-                     "detail": "The AI-written equivalence test fails on the ORIGINAL code, so it cannot prove equivalence."})
+        gaps.append({"type": "ai_equivalence_test_invalid",
+                     "detail": "The AI-written equivalence test fails on the ORIGINAL code, so it was discarded "
+                               "and proves nothing; verification relies on the project's own tests only."})
+    if last.get("equivalence_passed_on_replacement") is False:
+        gaps.append({"type": "behaviour_changed",
+                     "detail": "The AI equivalence test passes on the original but FAILS on the replacement."})
     for e in last.get("edits", []):
         if not e.get("applied"):
             gaps.append({"type": "edit_not_applied", "detail": f"{e['file']}: {e.get('reason')}"})
@@ -73,6 +77,19 @@ def _concerns(dep, ai, chk, mig) -> list[str]:
     return c
 
 
+def _dedupe_usage(usage: list[dict]) -> list[dict]:
+    seen, out = set(), []
+    for u in usage:
+        if u["kind"] == "reference":
+            continue
+        key = (u["file"], u["line"], u["kind"])
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(u)
+    return out
+
+
 def build_capsules(data: dict) -> list[dict]:
     caps = []
     for name, dep in sorted(data["inventory"].items(),
@@ -97,7 +114,7 @@ def build_capsules(data: dict) -> list[dict]:
                 },
                 "observed_risk": dep["observed_risk"],
                 "risk_indicators": dep["indicators"],
-                "usage_locations": [u for u in dep["usage"] if u["kind"] != "reference"],
+                "usage_locations": _dedupe_usage(dep["usage"]),
             },
             "ai_recommendation": None if not ai else {
                 "_provenance": "AI",
@@ -116,6 +133,9 @@ def build_capsules(data: dict) -> list[dict]:
                 "equivalence_test_on_original": (last or {}).get("equivalence_on_original", {}) and
                     last["equivalence_on_original"].get("summary"),
                 "candidate_replacement": (last or {}).get("candidate_run", {}) and last["candidate_run"].get("summary"),
+                "equivalence_test_on_replacement": (last or {}).get("equivalence_on_replacement") and
+                    last["equivalence_on_replacement"].get("summary"),
+                "equivalence_test_valid": mig.get("equivalence_valid"),
                 "comparison": (last or {}).get("comparison"),
                 "fix_attempts": len(mig.get("attempts", [])) - 1 if mig.get("attempts") else 0,
                 "attempts": mig.get("attempts"),
@@ -318,7 +338,9 @@ def render_markdown(doc: dict) -> str:
             L += ["", "### Executed test results [VERIFIED]", "",
                   f"- Original dependency (baseline): {_fmt(ex['baseline_original'])}",
                   f"- AI equivalence test on ORIGINAL code: {_fmt(ex.get('equivalence_test_on_original'))}",
-                  f"- Replacement: {_fmt(ex.get('candidate_replacement'))}",
+                  f"- Replacement (project's own tests): {_fmt(ex.get('candidate_replacement'))}",
+                  f"- AI equivalence test on REPLACEMENT: {_fmt(ex.get('equivalence_test_on_replacement'))}"
+                  f" (valid: {ex.get('equivalence_test_valid')})",
                   f"- Verdict: **{cmp.get('verdict')}** · fixed: {cmp.get('fixed')} · regressed: "
                   f"{[r['test'] for r in cmp.get('regressed', [])]}",
                   f"- AI fix attempts used: {ex.get('fix_attempts')}",

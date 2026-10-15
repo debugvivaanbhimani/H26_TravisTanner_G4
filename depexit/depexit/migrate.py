@@ -128,7 +128,8 @@ def _files_block(repo: Path, rels) -> str:
     return "\n\n".join(f"=== {k} ===\n{v}" for k, v in files.items())
 
 
-def _problem_text(cand: dict, cmp: dict, eq_orig: dict | None, eq_test_path: str) -> str:
+def _problem_text(cand: dict, cmp: dict, eq_orig: dict | None, eq_test_path: str,
+                  eq_cand: dict | None = None) -> str:
     lines = []
     if not cand.get("install_ok"):
         lines.append("Dependency installation FAILED:\n" + (cand.get("install_error") or "")[-2500:])
@@ -143,7 +144,19 @@ def _problem_text(cand: dict, cmp: dict, eq_orig: dict | None, eq_test_path: str
                                    or cand.get("summary", {}).get("pytest_exit_code") not in (0, 1)):
         out = cand["steps"][-1].get("stdout", "") if cand.get("steps") else ""
         lines.append("The test suite could not run (collection/import error). pytest output:\n" + out[-3500:])
+    if eq_cand is not None:
+        for k, v in list(eq_cand.get("tests", {}).items())[:4]:
+            if v["status"] in ("failed", "error"):
+                lines.append(f"EQUIVALENCE TEST (passes on original) FAILED ON THE REPLACEMENT {k}: "
+                             f"{v['message']}\n{v['detail'][-1500:]}")
+        if not eq_cand.get("tests"):
+            out = eq_cand["steps"][-1].get("stdout", "") if eq_cand.get("steps") else ""
+            lines.append("Equivalence test could not run on the replacement:\n" + out[-2000:])
     if eq_orig is not None:
+        if not eq_orig.get("tests"):
+            out = eq_orig["steps"][-1].get("stdout", "") if eq_orig.get("steps") else ""
+            lines.append("YOUR EQUIVALENCE TEST FILE COULD NOT EVEN BE COLLECTED ON THE ORIGINAL CODE "
+                         "(fix the test file itself):\n" + out[-2000:])
         bad = {k: v for k, v in eq_orig.get("tests", {}).items() if v["status"] in ("failed", "error")}
         for k, v in list(bad.items())[:4]:
             lines.append(f"EQUIVALENCE TEST FAILED ON THE ORIGINAL CODE (so the test itself is wrong) {k}: "
@@ -205,28 +218,48 @@ def migrate_dependency(gemma: Gemma, dep: dict, ai: dict, ctx: dict, max_fix: in
                                          test_paths=[test_path])
             record["_last_eq"], record["_last_eq_run"] = eq_test, eq_orig
 
-        cand = executor.run_suite(cand_repo, f"{name}/candidate#{attempt}", ctx["install_files"],
-                                  ctx["probe_modules"], ctx["python"])
-        cmp = executor.compare_runs(baseline, cand)
         eq_ok_orig = eq_orig is None or (eq_orig.get("summary", {}).get("failed", 0)
                                          + eq_orig.get("summary", {}).get("error", 0) == 0
-                                         and eq_orig.get("summary", {}).get("total", 0) > 0)
+                                         and eq_orig.get("summary", {}).get("total", 0) > 0
+                                         and eq_orig.get("summary", {}).get("pytest_exit_code") in (0, 1, 5))
+
+        # the project's OWN test suite, without the AI-written test, so a broken AI test
+        # can never hide whether the migration itself works
+        cand = executor.run_suite(cand_repo, f"{name}/candidate#{attempt}", ctx["install_files"],
+                                  ctx["probe_modules"], ctx["python"],
+                                  test_paths=[f"--ignore={test_path}"] if eq_test else None)
+        cmp = executor.compare_runs(baseline, cand)
+        suite_ok = cmp["verdict"] in ("all_tests_pass", "no_regressions_but_preexisting_failures")
+
+        # the AI equivalence test on the REPLACEMENT - only meaningful if it passed on the original
+        eq_cand = None
+        if eq_test and eq_ok_orig and cand.get("install_ok"):
+            eq_cand = executor.run_suite(cand_repo, f"{name}/replacement+equivalence-test#{attempt}",
+                                         ctx["install_files"], dep["modules"], ctx["python"],
+                                         test_paths=[test_path])
+        eq_ok_cand = eq_cand is None or (eq_cand.get("summary", {}).get("failed", 0)
+                                         + eq_cand.get("summary", {}).get("error", 0) == 0
+                                         and eq_cand.get("summary", {}).get("pytest_exit_code") in (0, 1, 5))
         record["attempts"].append({
             "attempt": attempt, "ai_explanation": resp.get("explanation"),
             "edits": applied, "candidate_run": _slim(cand), "comparison": cmp,
             "equivalence_on_original": _slim(eq_orig) if eq_orig else None,
             "equivalence_valid_on_original": eq_ok_orig,
+            "equivalence_on_replacement": _slim(eq_cand) if eq_cand else None,
+            "equivalence_passed_on_replacement": (eq_ok_cand if eq_cand else None),
         })
-        passed = cmp["verdict"] in ("all_tests_pass", "no_regressions_but_preexisting_failures") and eq_ok_orig
-        if passed:
+        record["equivalence_valid"] = bool(eq_test) and eq_ok_orig and eq_cand is not None and eq_ok_cand
+        if suite_ok and eq_ok_cand:
+            # verified by the project's own tests; an invalid AI test is reported, not trusted
             record["status"] = "verified"
             break
         if attempt == max_fix:
             record["status"] = "unresolved"
             break
-        problem = _problem_text(cand, cmp, eq_orig, test_path)
+        problem = _problem_text(cand, cmp, eq_orig if not eq_ok_orig else None, test_path, eq_cand)
         changed = {e.get("file") for e in all_edits if e.get("file")} | related_files | {test_path}
-        log(f"[{name}] verification failed ({cmp['verdict']}); sending real errors back to Gemma (fix {attempt + 1}/{max_fix})")
+        reason = cmp["verdict"] if not suite_ok else "equivalence test failed on replacement"
+        log(f"[{name}] verification failed ({reason}); sending real errors back to Gemma (fix {attempt + 1}/{max_fix})")
         try:
             resp = gemma.generate_json(FIX_PROMPT.format(name=name, problem=problem[:9000],
                                                          files=_files_block(cand_repo, changed),
@@ -275,7 +308,7 @@ def combined_migration(dep_results: dict[str, dict], ctx: dict) -> dict:
         applied.append({"dependency": name, "edits": res})
         files |= set(r.get("changed_files", []))
         eq = r.get("equivalence_test") or {}
-        if eq.get("content"):
+        if eq.get("content") and r.get("equivalence_valid"):
             (repo / eq["path"]).write_text(eq["content"], encoding="utf-8")
     if not applied:
         return {"status": "skipped", "reason": "no verified migrations to combine"}

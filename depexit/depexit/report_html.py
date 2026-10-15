@@ -118,7 +118,8 @@ $('#cards').innerHTML = D.capsules.map(c => {
     ${(v.uncited_high_indicators||[]).length?`<li>High-severity evidence the AI ignored: ${esc(v.uncited_high_indicators.join(', '))}</li>`:''}</ul></div>`;
   if (ex) { const cmp = ex.comparison||{};
     h += `<div class="sec VERIFIED"><div class="h">Executed tests ${tag('VERIFIED')}</div>
-    <div class="runs">${runBox('Original dependency', ex.baseline_original)}${runBox('AI equivalence test on original', ex.equivalence_test_on_original)}${runBox('Replacement', ex.candidate_replacement)}</div>
+    <div class="runs">${runBox('Original dependency — project tests', ex.baseline_original)}${runBox('Replacement — project tests', ex.candidate_replacement)}${runBox('AI equivalence test on original', ex.equivalence_test_on_original)}${runBox('AI equivalence test on replacement', ex.equivalence_test_on_replacement)}</div>
+    <p class="sub">AI-written equivalence test: ${ex.equivalence_test_valid ? '<b class="st-verified">valid — passed on both sides</b>' : '<b>not valid or not run — discarded; verification uses the project\'s own tests</b>'}</p>
     <p>Verdict <b>${esc(cmp.verdict)}</b> · AI fix attempts used: ${esc(ex.fix_attempts)} · fixed: ${esc((cmp.fixed||[]).join(', ')||'none')}</p>
     ${(ex.attempts||[]).map(a=>`<details><summary>Attempt ${a.attempt}: ${esc(a.comparison.verdict)} — ${a.edits.filter(e=>e.applied).length}/${a.edits.length} edits applied</summary>
       <p class="sub">${tag('AI')} ${esc(a.ai_explanation)}</p>

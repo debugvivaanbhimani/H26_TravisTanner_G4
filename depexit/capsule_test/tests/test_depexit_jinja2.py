@@ -1,0 +1,59 @@
+import pytest
+import os
+from pathlib import Path
+from datetime import datetime
+
+# Import the functions from the module under test
+from linkwatch.report import render_report, make_env
+
+
+def test_jinja2_usage_in_report(tmp_path, monkeypatch):
+    """Tests the core functionality of linkwatch/report.py which relies on Jinja2.
+    We mock the resource functions to ensure the test is self-contained.
+    """
+    
+    # 1. Setup temporary directory and template file
+    template_dir = tmp_path / "templates"
+    template_dir.mkdir()
+    
+    template_name = "status.html.j2"
+    template_path = template_dir / template_name
+    
+    # Create a simple template file that uses the variables passed to render_report
+    template_content = "<html><body><h1>{{ title }}</h1><p>Up count: {{ up }}</p></body></html>"
+    template_path.write_text(template_content)
+
+    # 2. Mock the resource functions used by linkwatch.report
+    # We must patch the functions *as they are seen by linkwatch.report*.
+    
+    def mock_template_dir():
+        return template_dir
+    
+    # Patching TEMPLATE_NAME and template_dir in the linkwatch.report module
+    monkeypatch.setattr("linkwatch.report.TEMPLATE_NAME", template_name)
+    monkeypatch.setattr("linkwatch.report.template_dir", mock_template_dir)
+
+    # 3. Test make_env
+    env = make_env()
+    assert env is not None
+    
+    # 4. Test render_report
+    results = [{"up": True}, {"up": False}]
+    
+    # Run the function under test
+    output_file = render_report(results, output="test_output.html", title="TestTitle")
+    
+    # 5. Assertions
+    assert output_file == "test_output.html"
+    output_path = Path("test_output.html")
+    assert output_path.exists()
+    
+    with open(output_path, "r", encoding="utf-8") as f:
+        content = f.read()
+        
+    # Check if the template variables were rendered correctly by Jinja2
+    assert "<h1>TestTitle</h1>" in content
+    assert "Up count: 1" in content
+    
+    # Cleanup the generated file
+    os.remove(output_path)
