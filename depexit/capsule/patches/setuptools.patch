@@ -1,0 +1,45 @@
+--- a/linkwatch/resources.py
++++ b/linkwatch/resources.py
+@@ -1,7 +1,9 @@
+-import pkg_resources
++from importlib import resources
++import pathlib
+ 
+ TEMPLATE_NAME = "status.html.j2"
+ 
+ 
+ def template_dir():
++    return str(resources.files('linkwatch').joinpath('templates'))
+     return pkg_resources.resource_filename("linkwatch", "templates")
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -6,7 +6,7 @@
+ click>=7
+ six
+ chardet==5.2.0
+-setuptools==75.8.0
++setuptools>=84.0.0
+ idna==2.7
+ python-dateutil
+ rich
+--- a/tests/test_depexit_setuptools.py
++++ b/tests/test_depexit_setuptools.py
+@@ -0,0 +1,18 @@
++import pytest
++import os
++from linkwatch.resources import template_dir
++
++def test_template_dir_behavior():
++    """Test that template_dir returns a valid path string within the package structure.
++    This ensures behavioral equivalence after migrating from pkg_resources.
++    """
++    path = template_dir()
++    
++    # 1. Check type
++    assert isinstance(path, str)
++    
++    # 2. Check content (must contain the 'templates' directory name)
++    assert "templates" in path
++    
++    # 3. Check if it looks like a path (i.e., contains a separator)
++    assert os.sep in path

@@ -1,0 +1,30 @@
+import pytest
+from linkwatch.dates import parse_last_modified
+from datetime import datetime
+
+def test_parse_last_modified_valid_date():
+    # Test a standard ISO format date
+    date_str = "2023-01-01T10:00:00"
+    result = parse_last_modified(date_str)
+    
+    # Check if the result is a datetime object and matches the input
+    assert isinstance(result, datetime)
+    assert result.year == 2023
+    assert result.month == 1
+    assert result.day == 1
+
+def test_parse_last_modified_empty_input():
+    # Test None input
+    assert parse_last_modified(None) is None
+    # Test empty string input
+    assert parse_last_modified("") is None
+
+def test_parse_last_modified_invalid_date_format():
+    # Test a clearly invalid string
+    invalid_str = "not a date"
+    assert parse_last_modified(invalid_str) is None
+
+def test_parse_last_modified_non_date_string():
+    # Test a long, non-date string to ensure error handling is triggered
+    long_invalid_str = "a" * 1000
+    assert parse_last_modified(long_invalid_str) is None

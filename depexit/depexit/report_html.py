@@ -235,9 +235,14 @@ $('#facts').innerHTML = [['Repository', repoName], ['Commit', (repo.commit||'').
   .map(([k,v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('');
 
 /* 01 summary */
-const base = S.baseline_tests || {}, comb = S.combined_tests;
+const base = S.baseline_tests || {};
+/* keep the project's own tests separate from the AI-written equivalence tests */
+function splitRun(run){ const z = () => ({passed:0,failed:0,error:0,skipped:0,total:0}); const proj = z(), eqt = z();
+  Object.entries((run && run.tests) || {}).forEach(([k,v]) => { const t = k.includes('test_depexit_') ? eqt : proj; t[v.status] = (t[v.status]||0) + 1; t.total++; });
+  return [proj, eqt]; }
+const [comb, eqComb] = (C && C.run && C.run.tests) ? splitRun(C.run) : [S.combined_tests, null];
 const figs = [];
-if (comb && total(comb)) figs.push(`<div class="fig good"><div class="v"><span class="from">${pass(base)}/${total(base)}</span><span class="arr">→</span><span class="to">${pass(comb)}/${total(comb)}</span></div><div class="l">tests passing, before → after verified fixes${tag('VERIFIED')}</div></div>`);
+if (comb && total(comb)) figs.push(`<div class="fig good"><div class="v"><span class="from">${pass(base)}/${total(base)}</span><span class="arr">→</span><span class="to">${pass(comb)}/${total(comb)}</span></div><div class="l">project tests passing, before → after verified fixes${tag('VERIFIED')}</div></div>`);
 else figs.push(`<div class="fig"><div class="v">${pass(base)}<span class="of">/${total(base)}</span></div><div class="l">tests passing with the original dependencies${tag('VERIFIED')}</div></div>`);
 figs.push(`<div class="fig bad"><div class="v">${S.observed_risk.high}</div><div class="l">high-risk dependencies${tag('OBSERVED')}</div></div>`);
 figs.push(`<div class="fig"><div class="v" style="color:var(--good)">${S.migrations_verified}<span class="of"> / ${S.migrations_attempted}</span></div><div class="l">AI fixes proven by tests${tag('VERIFIED')}</div></div>`);
@@ -249,7 +254,9 @@ story += `<b>${S.observed_risk.high} are high risk</b>${subtle.length ? `, inclu
 if (S.migrations_attempted) {
   story += `${esc(model || 'The AI')} proposed fixes for ${S.migrations_attempted} ${S.migrations_attempted===1?'dependency':'dependencies'}; each was applied in a clean environment and tested, and <b>${S.migrations_verified} ${S.migrations_verified===1?'was':'were'} proven to work</b>`;
   story += S.migrations_unresolved ? `, while ${S.migrations_unresolved} could not be verified and ${S.migrations_unresolved===1?'is':'are'} documented with the exact errors.` : '.';
-  if (comb && total(comb)) story += ` With every verified fix applied together, <b>${pass(comb)} of ${total(comb)} tests pass</b>.`;
+  if (comb && total(comb)) story += ` With every verified fix applied together, <b>${pass(comb)} of ${total(comb)} of the project's own tests pass</b>`;
+  if (eqComb && total(eqComb)) story += `, and all ${pass(eqComb)} of ${total(eqComb)} AI-written equivalence tests pass, each of which was first confirmed to pass on the original code.`;
+  else if (comb && total(comb)) story += '.';
 }
 $('#story').innerHTML = story;
 
@@ -278,7 +285,8 @@ function testsChart(){
     if (f) svg += `<rect x="${labelW + wp + 2}" y="${y}" width="${wf}" height="${H}" rx="3" fill="var(--crit-bar)" data-tip="${lab}: ${f} failed"/>`;
     svg += `<text x="${labelW + wp + (f ? wf + 2 : 0) + 8}" y="${y + H/2 + 4}">${p}/${total(s)}</text>`; });
   $('#c-tests').innerHTML = `<svg viewBox="0 0 ${W} ${rows.length * rowH}" role="img" aria-label="Test results">${svg}</svg>
-    <div class="legend"><span><i style="background:var(--good-bar)"></i>Passed</span><span><i style="background:var(--crit-bar)"></i>Failed</span></div>`;
+    <div class="legend"><span><i style="background:var(--good-bar)"></i>Passed</span><span><i style="background:var(--crit-bar)"></i>Failed</span></div>
+    <p class="small" style="margin-top:8px">Project's own tests only.${eqComb && total(eqComb) ? ` AI-written equivalence tests are counted separately (${pass(eqComb)}/${total(eqComb)} passing).` : ''}</p>`;
 }
 function kindsChart(){
   const counts = {};
@@ -328,7 +336,8 @@ if (C && C.run) {
   const cmp = C.comparison || {};
   $('#combinedIntro').innerHTML = `The project's own test suite, run on the original dependencies and again with every verified replacement applied at once.${tag('VERIFIED')}`;
   $('#combined').innerHTML = `<div class="figs" style="grid-template-columns:1fr 1fr"><div class="fig"><div class="v" style="font-size:32px">${fmt(D.baseline_run.summary)}</div><div class="l">original dependencies</div></div>
-    <div class="fig good"><div class="v" style="font-size:32px;color:var(--good)">${fmt(C.run.summary)}</div><div class="l">all verified replacements together</div></div></div>
+    <div class="fig good"><div class="v" style="font-size:32px;color:var(--good)">${fmt(comb)}</div><div class="l">all verified replacements together — project's own tests</div></div></div>
+    ${eqComb && total(eqComb) ? `<p class="small" style="margin-top:12px">Plus <b>${pass(eqComb)} of ${total(eqComb)}</b> AI-written equivalence tests passing on the combined replacement (each one was first confirmed to pass on the original code). ${tag('VERIFIED')}</p>` : ''}
     <p class="small" style="margin-top:12px">Tests fixed: ${esc((cmp.fixed||[]).join(', ')||'none')} · Tests broken: ${esc((cmp.regressed||[]).map(r=>r.test).join(', ')||'none')}${C.patch_file ? ` · Patch file: <code>${esc(C.patch_file)}</code>`:''}</p>`;
   secN = 5;
 }

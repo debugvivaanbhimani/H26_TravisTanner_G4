@@ -1,0 +1,76 @@
+--- a/linkwatch/cache.py
++++ b/linkwatch/cache.py
+@@ -1,7 +1,7 @@
+ import json
+ import os
+ 
+-from appdirs import user_cache_dir
++from platformdirs import user_cache_dir
+ 
+ RESULTS_FILE = "results.json"
+ 
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -11,7 +11,7 @@
+ requires-python = ">=3.10"
+ dependencies = [
+     "toml==0.10.2",
+-    "appdirs==1.4.4",
++    "platformdirs",
+     "requests==2.31.0",
+     "Jinja2==2.11.3",
+     "pydantic>=2",
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -1,5 +1,5 @@
+ toml==0.10.2
+-appdirs==1.4.4
++platformdirs
+ requests==2.31.0
+ Jinja2==2.11.3
+ pydantic==1.10.13
+--- a/tests/test_depexit_appdirs.py
++++ b/tests/test_depexit_appdirs.py
+@@ -0,0 +1,42 @@
++import pytest
++import os
++from linkwatch.cache import cache_dir, cache_file, save_results, load_results
++
++def test_cache_dir_is_a_path():
++    """Test that cache_dir returns a string path that exists and is a directory.
++    """
++    path = cache_dir()
++    assert isinstance(path, str)
++    assert os.path.isdir(path)
++
++def test_cache_dir_creation():
++    """Test that calling cache_dir ensures the directory exists.
++    """
++    # We call it once to ensure creation, then check existence.
++    path = cache_dir()
++    assert os.path.exists(path)
++    assert os.path.isdir(path)
++
++def test_cache_file_behavior():
++    """Test that cache_file returns a path correctly derived from the cache directory.
++    """
++    cache_path = cache_dir()
++    file_path = cache_file()
++    assert file_path.startswith(cache_path)
++    assert file_path.endswith("results.json")
++
++def test_save_and_load_results():
++    """Test the full cycle: save results, check existence, and load them back.
++    """
++    results = {"status": "ok", "count": 5}
++    
++    # Ensure the cache directory exists before we start
++    cache_dir()
++    
++    saved_path = save_results(results)
++    
++    assert os.path.exists(saved_path)
++    
++    loaded_results = load_results()
++    
++    assert loaded_results == results
