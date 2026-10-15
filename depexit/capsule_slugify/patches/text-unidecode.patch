@@ -1,0 +1,64 @@
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -11,7 +11,7 @@
+ license = "MIT"
+ license-files = ["LICENSE"]
+ authors = [{name = "Val Neekman", email = "info@neekware.com"}]
+-dependencies = ["text-unidecode>=1.3"]
++dependencies = ["unidecode"]
+ classifiers = [
+     "Development Status :: 5 - Production/Stable",
+     "Intended Audience :: Developers",
+@@ -26,7 +26,7 @@
+ ]
+ 
+ [project.optional-dependencies]
+-unidecode = ["Unidecode>=1.1.1"]
++unidecode = ["unidecode"]
+ anyascii = ["anyascii>=0.3.2"]
+ 
+ [project.scripts]
+--- a/tests/test_depexit_text_unidecode.py
++++ b/tests/test_depexit_text_unidecode.py
+@@ -0,0 +1,27 @@
++import pytest
++from tools.legacy_reference import slugify
++
++def test_unidecode_conversion_basic_accent():
++    # Test basic accented character conversion (e.g., é -> e)
++    text = "café"
++    # When allow_unicode=False, it should convert 'é' to 'e'
++    result = slugify(text, allow_unicode=False)
++    assert result == "cafe"
++
++def test_unidecode_conversion_multiple_accents():
++    # Test multiple accented characters (e.g., résumé -> resume)
++    text = "résumé"
++    result = slugify(text, allow_unicode=False)
++    assert result == "resume"
++
++def test_unidecode_conversion_complex_characters():
++    # Test characters that unidecode handles (e.g., ß -> ss)
++    text = "straße"
++    result = slugify(text, allow_unicode=False)
++    assert result == "strasse"
++
++def test_unidecode_conversion_non_accented_input():
++    # Ensure that if the input is already ASCII, the process doesn't break
++    text = "hello world"
++    result = slugify(text, allow_unicode=False)
++    assert result == "hello-world"
+--- a/tools/legacy_reference.py
++++ b/tools/legacy_reference.py
+@@ -6,10 +6,7 @@
+ from collections.abc import Iterable
+ from html.entities import name2codepoint
+ 
+-try:
+-    import unidecode
+-except ImportError:
+-    import text_unidecode as unidecode  # type: ignore[import-untyped, no-redef]
++import unidecode
+ 
+ __all__ = ['slugify', 'smart_truncate']
+ 
