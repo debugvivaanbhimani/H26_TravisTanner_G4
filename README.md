@@ -1,5 +1,6 @@
 # DepExit
-
+![DepExit report](depexit/capsule/screenshot1.png)
+![DepExit report](depexit/capsule/screenshot2.png)
 ### Verified dependency migrations, powered by Gemma 4
 
 **Team Travis Tanner** · Track 1 — *Gemma 4: Dependency Resilience*
